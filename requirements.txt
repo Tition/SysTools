@@ -1,0 +1,9 @@
+numpy
+opencv_python
+psutil
+pyautogui
+pywin32
+pywinauto
+pyscreeze
+Pillow
+pywinauto

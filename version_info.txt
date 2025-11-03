@@ -1,0 +1,47 @@
+# VSVersionInfo C/C++ header file
+# Created by PyInstaller
+#
+# In most cases, you need to edit StringFileInfo block.
+# All other blocks are formed automatically by PyInstaller.
+#
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    # FileVersion and ProductVersion must be a tuple of four numbers:
+    # (major, minor, patch, build).
+    # See below for info on StringFileInfo table values.
+    filevers=(0, 1, 0, 0),
+    prodvers=(0, 1, 0, 0),
+    # Set mask to 0 to use all bits in filevers and prodvers
+    mask=0x0,
+    # Valid flags include DEBUG, PRERELEASE, PATCHED, PRIVATEBUILD, SPECIALBUILD, ...
+    flags=0x0,
+    # File operating system.
+    # 0x40004 = VOS_NT_WINDOWS32
+    OS=0x40004,
+    # File type.
+    # 0x1 = VFT_APP
+    fileType=0x1,
+    # File subtype.
+    # 0x0 = VFT2_UNKNOWN
+    subtype=0x0,
+    # Creation date and time stamp.
+    date=(0, 0)
+    ),
+  kids=[
+    StringFileInfo(
+      [
+      StringTable(
+        # Language code for Simplified Chinese (China) + Unicode
+        u'080404b0',
+        [StringStruct(u'CompanyName', u'Studio T9'),
+        StringStruct(u'FileDescription', u'SysTools 0.1'),
+        StringStruct(u'FileVersion', u'0.1.0.0'),
+        StringStruct(u'InternalName', u'SysTools'),
+        StringStruct(u'LegalCopyright', u'© 2025 Studio T9'),
+        StringStruct(u'OriginalFilename', u'SysTools.exe'),
+        StringStruct(u'ProductName', u'SysTools 0.1'),
+        StringStruct(u'ProductVersion', u'0.1.0.0')])
+      ]), 
+    VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
+  ]
+)
