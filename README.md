@@ -2,7 +2,7 @@
 
 ![SysTools Icon](SysTools.ico)
 
-`SysTools` 是一个基于Python和Tkinter构建的模块化、可扩展的系统封装部署工具。
+`SysTools` 是一个完全由AI开发的基于Python和Tkinter构建的模块化、可扩展的系统封装部署工具。
 
 该工具的核心思想是通过一个主程序动态加载和执行一系列独立的“插件”，每个插件负责完成一项具体的系统配置或软件安装任务。
 
