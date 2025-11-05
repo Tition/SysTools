@@ -1,150 +1,277 @@
 # SysTools - 系统封装部署工具
 
-![SysTools Icon](SysTools.ico)
+    ![SysTools](SysTools.ico)
 
-`SysTools` 是一个完全由AI开发的基于Python和Tkinter构建的模块化、可扩展的系统封装部署工具。
+一个完全由AI构建的（Gemini、DeepSeek、Claude），基于Python的模块化系统工具，提供插件化架构，支持GUI和命令行两种操作模式，用于系统优化、部署和自动化任务。
 
-该工具的核心思想是通过一个主程序动态加载和执行一系列独立的“插件”，每个插件负责完成一项具体的系统配置或软件安装任务。
+## 🚀 功能特点
 
-## 🌟 功能特性
+*   **插件化架构** - 支持动态加载和管理功能插件
+*   **双模式运行** - 支持GUI界面和命令行自动模式
+*   **管理员权限** - 自动请求UAC管理员权限
+*   **自动打包** - 一键打包为独立可执行文件
+*   **智能依赖收集** - 自动分析插件依赖关系
+*   **跨环境兼容** - 支持开发环境和打包后环境
 
-- **插件化架构**：所有功能均通过独立的插件实现，易于开发、维护和分享。
-- **MVP 架构**：彻底解耦业务逻辑 (Model)、UI展示 (View) 和事件处理 (Presenter)，代码结构清晰，可维护性极高。
-- **自动依赖打包**：通过辅助脚本自动收集所有插件的依赖项，简化了PyInstaller的打包流程。
-- **多种运行模式**：
-  - **图形用户界面 (GUI)**：提供完整的交互式界面，供用户选择并执行功能。
-  - **全自动模式 (`-auto`)**：静默执行所有插件，适用于系统封装的最后阶段。
-  - **调试模式**：内置多种调试参数，方便开发者在不实际修改系统的情况下测试插件逻辑和UI流程。
-  - **控制台模式 (`-console`)**：为GUI应用附加一个控制台，实时查看详细的运行日志。
-- **用户友好的交互**：包含了防窗口闪烁、优雅的加载动画、任务中断等多种提升用户体验的细节。
+## 📁 项目结构
 
-## 📂 项目结构与文件说明
+    SysTools/
+    ├── 📄 Build.bat                     # 自动化打包脚本
+    ├── 📄 build_exclude.txt             # 打包排除列表
+    ├── 📄 collect_imports.py            # 依赖收集脚本
+    ├── 📄 core.py                       # 核心引擎
+    ├── 📄 debug_cli.py                  # 命令行调试界面
+    ├── 📄 gui_tk.py                     # Tkinter GUI界面
+    ├── 📄 main.py                       # 主程序入口
+    ├── 📄 plugin_base.py                # 插件基类
+    ├── 📄 plugin_manager.py             # 插件管理器
+    ├── 📄 presenter.py                  # GUI表示层
+    ├── 📄 requirements.txt              # Python依赖
+    ├── 📄 Set_SysTools_RunOnce.reg      # 自启动注册表文件
+    ├── 📄 SysTools.ico                  # 应用程序图标
+    ├── 📄 version_info.txt              # 版本信息文件
+    ├── 📁 plugins/                      # 主插件目录
+    │   ├── 📄 00_sample_plugin.py       # 示例插件
+    │   ├── 📄 01_reg_repair.py          # 注册表修复插件
+    │   └── 📁 tools/                    # 插件工具目录
+    │       ├── 📄 sample_logic.py       # 示例插件逻辑
+    │       ├── 📄 reg.ps1               # PowerShell注册表脚本
+    │       └── 📁 templates/            # 图像识别模板
+    ├── 📁 plugins_test/                 # 测试插件目录
+    └── 📁 SysTools_FinalPackage/        # 打包输出目录
 
----
+## 🛠️ 安装与运行
 
-### **核心架构**
+### 环境要求
 
-- **`main.py`**
-  > **角色：启动器 (Launcher)**
-  > 这是整个应用程序的入口。它的职责非常纯粹：解析命令行参数以决定运行模式（GUI或自动），创建并“组装”MVP三层架构的核心组件，然后启动应用。它不包含任何业务逻辑或UI代码。
+*   **操作系统**: Windows 10/11
+*   **Python**: 3.7+
+*   **权限**: 管理员权限（部分功能需要）
 
-- **`core.py`**
-  > **角色：模型 (Model)**
-  > 应用程序的“大脑”和“引擎”。它负责所有后台的、非UI的业务逻辑，包括：插件的加载与执行、命令行参数的详细解析、自毁与清理任务、以及管理应用的全局状态（如“是否需要重启”）。它通过回调函数与上层（Presenter）通信，完全不知道UI的存在。
+### 安装依赖
 
-- **`gui_tk.py`**
-  > **角色：视图 (View)**
-  > 使用 `Tkinter` 库构建的用户界面。这是一个“愚蠢”的视图，它只负责创建和展示窗口、按钮、列表等UI控件。它不知道点击按钮后具体会发生什么，只负责在事件发生时通知 `Presenter`。所有UI的更新都由 `Presenter` 指挥。它可以通过 `GUI_DEBUG_MODE` 开关独立运行以方便UI调试。
+```bash
+pip install -r requirements.txt
+```
 
-- **`presenter.py`**
-  > **角色：主持人 (Presenter)**
-  > 连接 Model 和 View 的“中枢神经系统”。它监听来自 `gui_tk.py` 的用户操作（如按钮点击），然后向 `core.py` 下达指令；同时，它也监听来自 `core.py` 的后台状态更新（如日志、进度），然后指挥 `gui_tk.py` 更新界面显示。所有的交互逻辑都在这里实现。
+### 运行程序
 
----
+#### GUI模式（默认）
 
-### **插件系统**
+```bash
+python main.py
+```
 
-- **`plugins/`**
-  > **插件目录**
-  > 这是主程序在正常模式下加载功能插件的地方。每个 `.py` 文件都是一个独立的插件“包装器”，负责向主程序提供名称、描述等信息，并定义 `execute` 方法来调用具体的逻辑。
+#### 命令行调试模式
 
-- **`plugins/tools/`**
-  > **插件逻辑与资源目录**
-  > 存放插件的具体实现逻辑脚本（如 `sample_logic.py`）和它们所需的配置文件（`.ini`）。这种“包装器-逻辑”分离的设计模式，使得复杂的功能可以被独立测试和维护。<br>
-  > 当然，你也可以将实现逻辑直接写入插件文件内，也可以在此存放你需要的.exe或其他文件。
+```bash
+python debug_cli.py
+```
 
-- **`plugins/tools/templates/`**
-  > **图像识别模板目录**
-  > 存放所有插件在进行GUI自动化时，需要用到的模板图像文件（`建议使用.bmp`）。
+## ⚙️ 命令行参数
 
-- **`plugins_test/`**
-  > **测试插件目录**
-  > 当程序以 `-test` 参数启动时，会加载此目录下的插件。这为开发和测试新插件提供了一个隔离的环境，不会影响主 `plugins` 目录。
+| 参数                  | 说明                        |
+| :------------------ | :------------------------ |
+| `-auto`             | 全自动模式：顺序执行所有插件            |
+| `-test`             | 测试模式：加载`plugins_test`目录插件 |
+| `-cleanup`          | 清理模式：执行后删除程序自身            |
+| `-console`          | 控制台模式：为GUI附加控制台窗口         |
+| `-debug`            | 调试模式：模拟执行（随机成功/失败）        |
+| `-debug-success`    | 调试模式：模拟执行（全部成功）           |
+| `-debuggui`         | GUI调试模式：在界面中模拟执行          |
+| `-debuggui-success` | GUI调试模式：模拟执行（全部成功）        |
 
-- **`plugin_base.py`**
-  > **插件基类**
-  > 定义了所有插件都必须遵守的“接口约定”（`ABC - Abstract Base Class`）。它规定了每个插件都必须实现 `get_name()`, `get_description()`, `execute()` 等核心方法。
+### 使用示例
 
-- **`plugin_manager.py`**
-  > **插件管理器**
-  > 负责动态地发现、加载、验证和排序 `plugins/` 或 `plugins_test/` 目录中的所有插件文件。
+```bash
+# 全自动模式执行主插件
+python main.py -auto
 
----
+# 测试模式执行测试插件
+python main.py -test -auto
 
-### **构建与打包**
+# 全自动执行并清理
+python main.py -auto -cleanup
 
-- **`build.bat`**
-  > **自动化打包脚本**
-  > 一个强大的批处理脚本，它会自动完成打包一个可发布 `.exe` 所需的所有步骤：清理旧文件 -> 自动收集依赖 -> 调用PyInstaller打包 -> 整理和复制所有必要的文件（插件、配置、图标等）到一个干净的发布文件夹中。
+# 调试模式
+python main.py -debug
+```
 
-- **`collect_imports.py`**
-  > **依赖收集脚本**
-  > 这是自动化打包流程的核心。它会自动扫描所有插件和工具脚本，提取所有的 `import` 语句，并生成一个 `_hidden_imports.py` 文件，以确保PyInstaller在打包时不会遗漏任何插件所需的库。
+## 🔌 插件开发
 
-- **`_hidden_imports.py`**
-  > **自动生成的依赖文件**
-  > 由 `collect_imports.py` 自动生成，被 `main.py` 导入。它的唯一作用就是向PyInstaller“暴露”所有插件的隐藏依赖。**此文件不应手动编辑**。
+### 创建新插件
 
-- **`requirements.txt`**
-  > **项目依赖清单**
-  > 记录了开发本项目所需的所有第三方Python库。在一个新的开发环境中，只需运行 `pip install -r requirements.txt` 即可快速搭建起与作者完全一致的开发环境。
+1.  在`plugins`目录下创建新的Python文件，命名格式：`XX_plugin_name.py`
+2.  继承`BasePlugin`基类
+3.  实现必需的方法
 
-- **`version_info.txt`**
-  > **版本信息文件**
-  > 用于在PyInstaller打包时，将详细的版本号、公司名称、版权等信息嵌入到最终生成的 `.exe` 文件的属性中。
+### 插件模板
 
-- **`00_sample_plugin.py`**
-  > **功能演示插件**
-  > 用于示例插件的写法。
+```python
+from plugin_base import BasePlugin
 
-- **`sample_logic.py`**
-  > **功能演示插件的逻辑文件**
-  > 创建一个tk窗口，播放动画，及在用户说明下创建一个txt文件。
+class MyPlugin(BasePlugin):
+    def get_name(self) -> str:
+        return "我的插件"
+    
+    def get_description(self) -> str:
+        return "插件功能描述"
+    
+    def is_available(self) -> bool:
+        return True
+    
+    def execute(self):
+        try:
+            # 插件逻辑
+            return {
+                'success': True,
+                'message': '执行成功',
+                'reboot': False  # 是否需要重启
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+```
 
-- **`01_reg_repair.py`**
-  > **注册表修复插件**
-  > 用于运行 \tools 文件夹下的 reg.ps1 脚本文件，并向gui返回运行结果。
+### 插件工具
 
-- **`reg.ps1`**
-  > **注册表替换脚本**
-  > 自动扫描注册表内 C:\Users\Administrator 路径，并将Administrator替换为当前用户名。
----
+复杂插件可以将逻辑代码放在`plugins/tools/`目录下，通过动态导入使用：
 
-### **其他文件**
+```python
+def execute(self):
+    try:
+        # 动态导入工具模块
+        if self.tools_dir not in sys.path:
+            sys.path.insert(0, self.tools_dir)
+        
+        logic_module = importlib.import_module("my_logic")
+        logic_instance = logic_module.MyLogic()
+        return logic_instance.run()
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+```
 
-- **`debug_cli.py`**
-  > **命令行调试工具**
-  > 一个纯命令行的交互界面，直接与 `core.py` 对话。它的存在完美地证明了 `core.py` 是一个可以脱离任何GUI独立运行的引擎，非常适合用于后台逻辑的快速测试和调试。
+## 📦 打包分发
 
-- **`SysTools.ico`**
-  > **应用程序图标**
-  > 用于主窗口、所有对话框以及最终打包生成的 `.exe` 文件。
+### 一键打包
 
-- **`Set_SysTools_RunOnce.reg`**
-  > **注册表文件**
-  > 一个注册表脚本。双击导入后，它会将本程序添加到Windows的 `RunOnce` 启动项中，使得程序在下次系统启动时能以 `SYSTEM` 高级权限自动运行一次，这对于执行某些需要极高权限的系统级设置非常有用。
+运行打包脚本：
 
-## 🚀 快速开始
+```bash
+Build.bat
+```
 
-1.  **创建虚拟环境并安装依赖**
-    ```bash
-    python -m venv .venv
-    .\.venv\Scripts\activate
-    pip install -r requirements.txt
-    ```
+打包过程：
 
-2.  **运行程序**
-    *   **GUI模式**:
-        ```bash
-        python main.py
-        ```
-    *   **命令行调试模式**:
-        ```bash
-        python debug_cli.py
-        ```
+1.  **清理** - 删除旧文件
+2.  **依赖收集** - 自动分析插件依赖
+3.  **PyInstaller打包** - 生成独立EXE
+4.  **文件组装** - 整理插件和资源文件
+5.  **清理临时文件** - 保持目录整洁
 
-3.  **打包程序**
-    ```bash
-    .\build.bat
-    ```
-    打包完成后，所有可分发的文件将位于 `SysTools_FinalPackage/` 文件夹中。
+### 打包输出
+
+打包后在`SysTools_FinalPackage/`目录生成：
+
+*   `SysTools.exe` - 主程序
+*   `plugins/` - 功能插件
+*   `plugins_test/` - 测试插件
+*   `templates/` - 图像模板
+*   配置文件等
+
+## 🎯 使用指南
+
+### GUI模式
+
+1.  运行程序，显示主界面
+2.  插件列表显示所有可用功能
+3.  选择要执行的插件（支持多选）
+4.  点击"执行选中功能"或"执行全部功能"
+5.  查看执行日志和进度
+
+### 自动模式
+
+1.  使用命令行参数启动自动模式
+2.  程序按插件文件名顺序执行
+3.  显示浮动进度窗口
+4.  执行完成后显示结果对话框
+
+### 插件执行流程
+
+1.  **加载插件** - 动态发现和验证插件
+2.  **权限检查** - 验证插件可用性
+3.  **执行逻辑** - 调用插件execute方法
+4.  **结果处理** - 处理成功/失败结果
+5.  **重启管理** - 处理需要重启的情况
+
+## 🔧 高级功能
+
+### 自毁机制
+
+使用`-cleanup`参数时，程序支持：
+
+*   **延时自毁** - 执行后删除程序文件
+*   **重启自毁** - 重启后删除程序文件
+*   **文件夹清理** - 删除整个应用目录
+
+### 图像识别
+
+插件可以访问`templates/`目录中的图像模板，用于GUI自动化任务。
+
+### 注册表操作
+
+提供PowerShell脚本支持，用于复杂的注册表操作。
+
+## ⚠️ 注意事项
+
+1.  **管理员权限** - 部分系统操作需要管理员权限
+2.  **杀毒软件** - 可能误报，请添加到白名单
+3.  **文件路径** - 避免使用中文和特殊字符路径
+4.  **插件安全** - 仅加载可信插件
+5.  **备份数据** - 重要操作前建议备份
+
+## 🐛 故障排除
+
+### 常见问题
+
+**Q: 插件加载失败**\
+A: 检查插件文件语法和依赖
+
+**Q: 打包后无法运行**\
+A: 确保所有依赖文件正确复制
+
+**Q: 权限不足**\
+A: 以管理员身份运行程序
+
+**Q: 图标不显示**\
+A: 确保图标文件在正确路径
+
+### 调试模式
+
+使用调试参数测试插件逻辑：
+
+```bash
+python main.py -debuggui
+```
+
+## 📄 许可证
+
+本项目仅供学习和内部使用。
+
+## 🤝 贡献
+
+欢迎提交Issue和Pull Request来改进项目。
+
+## 📞 支持
+
+如有问题，请通过以下方式联系：
+
+*   GitHub Issues
+*   项目文档
+*   开发团队
+
+***
+
+\*最后更新: 2025-11-05\*
