@@ -1,6 +1,6 @@
 # SysTools - 系统封装部署工具
 
-    ![SysTools](SysTools.ico)
+![SysTools](SysTools.ico)
 
 一个完全由AI构建的（Gemini、DeepSeek、Claude），基于Python的模块化系统工具，提供插件化架构，支持GUI和命令行两种操作模式，用于系统优化、部署和自动化任务。
 
