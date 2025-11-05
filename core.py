@@ -362,9 +362,11 @@ class CoreEngine:
         os._exit(0)
 
     def _schedule_post_reboot_cleanup(self) -> bool:
-        """创建一次性的、开机自启动的管理员权限任务计划，用于在重启后执行自毁脚本。"""
+        """创建重启后清理任务 (V2 - 文件夹模式)。"""
         try:
-            if not getattr(sys, 'frozen', False): return True
+            if not getattr(sys, 'frozen', False):
+                print("开发环境，跳过重启后自毁任务注册。")
+                return True
 
             app_dir = os.path.dirname(sys.executable)
             temp_dir = tempfile.gettempdir()
@@ -373,25 +375,30 @@ class CoreEngine:
             bat_path = os.path.join(temp_dir, f"systools_cleanup_{pid}.bat")
             log_file = os.path.join(temp_dir, f"systools_cleanup_log_{pid}.txt")
 
-            files_to_delete = ["autokms.ini", "dopus_installer.ini", "driver_360_autoins.ini", "ps_plugin_register.ini",
-                               "qi_register.ini", "SysTools.exe", "SysTools.ico", "xunjiepdf_register.ini"]
-            folders_to_delete = ["plugins", "plugins_test", "templates"]
-            delete_file_cmds = " & ".join([f'del /f /q "{os.path.join(app_dir, fname)}"' for fname in files_to_delete])
-            delete_folder_cmds = " & ".join(
-                [f'rmdir /s /q "{os.path.join(app_dir, dname)}"' for dname in folders_to_delete])
-
+            # 直接删除整个应用目录
             bat_content = f"""
 @echo off
+cd /d %~dp0
+
 (
     echo Post-Reboot Cleanup Started at %date% %time%
-    echo Target: {app_dir}
-    {delete_file_cmds}
-    {delete_folder_cmds}
-    del /f /q "{os.path.join(app_dir, '*.log')}" > nul 2>&1
-    rmdir "{app_dir}" > nul 2>&1
+    echo Target Directory: {app_dir}
+    echo.
+
+    echo [Step 1] Deleting the entire application directory...
+    rmdir /s /q "{app_dir}"
+    echo Done.
+    echo.
+    
+    echo [Step 2] Deleting the scheduled task itself...
     schtasks /Delete /TN "{task_name}" /F
+    echo Done.
+    echo.
+
     echo Post-Reboot Cleanup Finished.
 ) > "{log_file}" 2>&1
+
+REM 最后，删除自己
 (goto) 2>nul & del "%~f0"
 """
             with open(bat_path, "w", encoding="oem") as f:
@@ -412,9 +419,11 @@ class CoreEngine:
             return False
 
     def _initiate_delayed_self_destruct(self, reboot: bool = False):
-        """创建并以管理员权限启动一个延时的自毁脚本。"""
+        """创建并以管理员权限启动一个延时的自毁脚本 (V2 - 文件夹模式)。"""
         try:
-            if not getattr(sys, 'frozen', False): return
+            if not getattr(sys, 'frozen', False):
+                print("开发环境，跳过自毁。")
+                return
 
             app_dir = os.path.dirname(sys.executable)
             temp_dir = tempfile.gettempdir()
@@ -423,37 +432,39 @@ class CoreEngine:
             vbs_path = os.path.join(temp_dir, f"systools_elevate_{pid}.vbs")
             log_file = os.path.join(temp_dir, f"systools_cleanup_log_{pid}.txt")
 
-            files_to_delete = ["autokms.ini", "dopus_installer.ini", "driver_360_autoins.ini", "ps_plugin_register.ini",
-                               "qi_register.ini", "SysTools.exe", "SysTools.ico", "xunjiepdf_register.ini"]
-            folders_to_delete = ["plugins", "plugins_test", "templates"]
-            delete_file_cmds = " & ".join([f'del /f /q "{os.path.join(app_dir, fname)}"' for fname in files_to_delete])
-            delete_folder_cmds = " & ".join(
-                [f'rmdir /s /q "{os.path.join(app_dir, dname)}"' for dname in folders_to_delete])
-
             reboot_cmd = 'shutdown /r /t 15 /c "SysTools cleanup complete. System is restarting."' if reboot else ''
 
+            # 直接删除整个应用目录
             bat_content = f"""
 @echo off
+cd /d %~dp0
+
 (
     echo Self-Destruct Sequence Started at %date% %time%
-    echo Target: {app_dir}
+    echo Target Directory: {app_dir}
+    
+    echo [Step 1] Waiting 10 seconds for main application to fully exit...
     ping 127.0.0.1 -n 11 > nul
-    {delete_file_cmds}
-    {delete_folder_cmds}
-    del /f /q "{os.path.join(app_dir, '*.log')}"
-    rmdir "{app_dir}" > nul 2>&1
+    echo Done.
+
+    echo [Step 2] Deleting the entire application directory...
+    rmdir /s /q "{app_dir}"
+    echo Done.
+    
     {reboot_cmd}
+    
     echo Self-Destruct Sequence Finished.
+
 ) > "{log_file}" 2>&1
+
+REM 最后，删除VBS包装器和自己
 (goto) 2>nul & del "{vbs_path}" & del "%~f0"
 """
             reboot_arg = "REBOOT" if reboot else "NOREBOOT"
             vbs_content = f'CreateObject("Shell.Application").ShellExecute "{bat_path}", "{reboot_arg}", "", "runas", 0'
 
-            with open(bat_path, "w", encoding="oem") as f:
-                f.write(bat_content)
-            with open(vbs_path, "w", encoding="utf-8") as f:
-                f.write(vbs_content)
+            with open(bat_path, "w", encoding="oem") as f: f.write(bat_content)
+            with open(vbs_path, "w", encoding="utf-8") as f: f.write(vbs_content)
 
             subprocess.Popen(['wscript.exe', vbs_path], creationflags=subprocess.DETACHED_PROCESS)
             print("自毁流程已启动。")

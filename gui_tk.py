@@ -4,13 +4,13 @@ import sys
 import os
 import time
 import webbrowser
+import ctypes
 from typing import List, TYPE_CHECKING, Callable
 
 # GUI_DEBUG_MODE 开关依然保留，用于独立UI调试 True为gui调试，False为正常运行
 GUI_DEBUG_MODE = False
 
 if TYPE_CHECKING:
-    from core import CoreEngine
     from plugin_base import BasePlugin
 
 
@@ -98,16 +98,65 @@ class PulsingFontIndicator:
         self._animation_step += 1
         self.frame.after(16, self._animate)  # 提高帧率到约 60 FPS
 
-def set_window_icon(window):
-    try:
-        base_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(
-            os.path.abspath(__file__))
-        icon_path = os.path.join(base_dir, "SysTools.ico")
-        if os.path.exists(icon_path):
-            window.iconbitmap(icon_path)
-    except Exception as e:
-        print(f"设置窗口图标失败: {e}")
 
+def set_window_icon(window):
+    """为给定的Tkinter窗口设置图标 (最终强化版)"""
+    try:
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        icon_path = os.path.join(base_dir, "SysTools.ico")
+
+        if os.path.exists(icon_path):
+            # Tkinter的标准方法，设置窗口左上角图标
+            window.iconbitmap(icon_path)
+
+            # --- 【核心强化】使用Windows原生API强制设置任务栏图标 ---
+            # 这可以绕过很多缓存问题
+            if sys.platform.startswith('win'):
+                import ctypes
+                # WM_SETICON, ICON_BIG, ICON_SMALL
+                WM_SETICON = 0x0080
+                ICON_BIG = 1
+                ICON_SMALL = 0
+
+                # 获取窗口句柄 (HWND)
+                hwnd = window.winfo_id()
+
+                # 加载图标句柄 (HICON)
+                h_icon = ctypes.windll.user32.LoadImageW(
+                    None, icon_path, 1, 0, 0, 0x00000010 | 0x00008000
+                )
+
+                if h_icon:
+                    # 为大图标（任务栏）和小图标（标题栏）都设置
+                    ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_icon)
+                    ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_icon)
+                    print(f"成功通过原生API为窗口 {hwnd} 设置图标。")
+                else:
+                    print(f"警告: LoadImageW 未能加载图标: {icon_path}")
+
+        else:
+            print(f"图标文件未找到: {icon_path}")
+    except Exception as e:
+        print(f"设置窗口图标时发生错误: {e}")
+
+def set_app_id(app_id: str):
+    """
+    为当前进程设置一个唯一的AppUserModelID。
+    这有助于Windows任务栏正确地识别应用并显示其图标，
+    尤其是在开发环境中 (运行python.exe时)。
+    """
+    if sys.platform.startswith('win'):
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+        except (AttributeError, ctypes.ArgumentError) as e:
+            print(f"警告: 无法设置AppUserModelID: {e}")
+            print("这在非Windows系统或是旧版Windows上是正常的。")
+        except Exception as e:
+            print(f"设置AppUserModelID时发生未知错误: {e}")
 
 class FloatingNotice:
     """底部居中半透明提示框 - 完整功能版"""
@@ -269,7 +318,7 @@ class AboutDialog:
         link_label = tk.Label(link_frame, text="https://github.com/Tition/SysTools.git", font=("微软雅黑", 10), fg="#3498DB",
                               cursor="hand2");
         link_label.pack();
-        link_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com"))
+        link_label.bind("<Button-1>", lambda e: webbrowser.open("https://github.com/Tition/SysTools.git"))
         button_frame = ttk.Frame(main_frame);
         button_frame.pack(fill=tk.X, pady=(15, 0))
         ttk.Button(button_frame, text="关闭", command=self.dialog.destroy, width=10).pack(side=tk.RIGHT, padx=5)
@@ -375,6 +424,109 @@ class RestartDialog:
         y = (self.dialog.winfo_screenheight() - h) // 2;
         self.dialog.geometry(f"{w}x{h}+{x}+{y}")
 
+
+class HelpDialog:
+    """一个自定义的、内容可复制的帮助对话框"""
+
+    def __init__(self, parent):
+        # --- 窗口初始化与防闪烁 ---
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.overrideredirect(True)
+        self.dialog.geometry("+10000+10000")
+
+        self.dialog.title("启动参数帮助")
+        self.dialog.attributes("-topmost", True)
+        set_window_icon(self.dialog)
+
+        # --- UI 构建 ---
+        self.setup_ui()
+
+        # --- 模态与显示 ---
+        self.dialog.overrideredirect(False)
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        self.center_window(600, 700)  # 给予更大的尺寸
+
+        # 使用 wait_window 使其阻塞，像 messagebox 一样
+        parent.wait_window(self.dialog)
+
+    def setup_ui(self):
+        main_frame = ttk.Frame(self.dialog, padding=(15, 15, 15, 10))
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        title_label = ttk.Label(main_frame, text="SysTools - 命令行参数帮助", font=("微软雅黑", 14, "bold"))
+        title_label.pack(pady=(0, 15))
+
+        # --- 核心：使用 ScrolledText 控件来显示可选择、可滚动的文本 ---
+        self.help_text_widget = scrolledtext.ScrolledText(
+            main_frame,
+            wrap=tk.WORD,
+            font=("微软雅黑", 10),
+            height=20,
+            padx=10,
+            pady=10,
+            relief=tk.SOLID,
+            borderwidth=1
+        )
+        self.help_text_widget.pack(fill=tk.BOTH, expand=True)
+
+        self.help_message = (
+            "SysTools.exe 支持以下命令行参数:\n\n"
+            "-auto\n"
+            "    全自动模式：按顺序静默执行所有 'plugins' 目录中的插件。\n\n"
+            "-test\n"
+            "    测试模式：加载并执行 'plugins_test' 目录中的插件。\n\n"
+            "-cleanup\n"
+            "    清理模式：在 -auto 模式执行完毕后，自动删除程序自身及其所有相关文件。\n"
+            "    请注意一定要将本程序解压到独立文件夹，否则可能误删其他文件\n\n"
+            "-console\n"
+            "    控制台模式：为GUI应用附加一个控制台窗口，用于显示详细的运行日志。\n\n"
+            "-debug\n"
+            "    调试模式 (自动)：在 -auto 模式下模拟插件执行（随机成功/失败），不进行实际操作。\n\n"
+            "-debug-success\n"
+            "    调试模式 (全部成功)：在 -auto 模式下模拟插件执行，并总是返回成功。\n\n"
+            "-debuggui\n"
+            "    调试模式 (GUI)：在GUI界面中模拟插件执行（随机成功/失败）。\n\n"
+            "-debuggui-success\n"
+            "    调试模式 (GUI - 全部成功)：在GUI界面中模拟插件执行，并总是返回成功。\n\n"
+            "示例用法：\n"
+            "    -test -auto >> 以自动模式加载并执行 'plugins_test' 目录中的插件。\n"
+            "    -auto -cleanup >> 以自动模式加载并执行 'plugins' 目录中的插件，并清理程序本身。"
+
+        )
+
+        self.help_text_widget.insert(tk.END, self.help_message)
+        # 将文本框设为只读（但内容仍可被选中和复制）
+        self.help_text_widget.config(state=tk.DISABLED)
+
+        # --- 按钮栏 ---
+        button_frame = ttk.Frame(main_frame, padding=(0, 10, 0, 0))
+        button_frame.pack(fill=tk.X)
+
+        self.copy_button = ttk.Button(button_frame, text="复制全部内容", command=self._copy_to_clipboard)
+        self.copy_button.pack(side=tk.LEFT)
+
+        close_button = ttk.Button(button_frame, text="关闭", command=self.dialog.destroy)
+        close_button.pack(side=tk.RIGHT)
+
+    def _copy_to_clipboard(self):
+        """将帮助文本复制到系统剪贴板"""
+        self.dialog.clipboard_clear()
+        self.dialog.clipboard_append(self.help_message)
+
+        # 提供视觉反馈
+        original_text = self.copy_button['text']
+        self.copy_button.config(text="已复制!")
+        self.dialog.after(1500, lambda: self.copy_button.config(text=original_text))
+
+    def center_window(self, width, height):
+        self.dialog.update_idletasks()
+        screen_width = self.dialog.winfo_screenwidth()
+        screen_height = self.dialog.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        self.dialog.geometry(f"{width}x{height}+{x}+{y}")
+
 class TkinterGUI:
     """
     Tkinter View (视图) 层。
@@ -387,7 +539,8 @@ class TkinterGUI:
         self.plugin_vars = {}
         self.root = tk.Tk()
         self.stop_callback = None
-        # 【防闪烁技巧】对于主窗口，使用 withdraw() 仍然是最佳实践
+
+        # 1. 像以前一样，先 withdraw() 来进行所有后台配置
         self.root.withdraw()
 
         set_window_icon(self.root)
@@ -398,53 +551,30 @@ class TkinterGUI:
 
         self.root.title(title)
 
-        # 先不设置 geometry，在显示前再设置
-        # self.root.geometry("900x700")
-
         self._setup_styles()
         self._setup_gui()
 
-        # 在所有组件都创建好之后，居中并显示
+        # 2. 在所有组件都创建好之后，居中
         self.center_window(self.root, 900, 700)
+
+        # 3. 【核心修复】执行“欺骗”任务栏的技巧
+        #    这个函数会在短暂延迟后执行，确保窗口已准备好
+        def force_taskbar_icon_update():
+            # a. 短暂地将窗口完全隐藏（从任务栏也消失）
+            self.root.withdraw()
+            # b. 立即重新显示它
+            #    deiconify() 会让窗口以其最后的位置和大小重新出现
+            self.root.deiconify()
+
+        # 4. 正常地显示窗口
         self.root.deiconify()
 
-    # ======================================================
-    # Section 1: Presenter 控制 View 的接口
-    # ======================================================
+        # 5. 在窗口显示后，安排一个极短延迟（例如200毫秒）后执行我们的“欺骗”函数
+        self.root.after(200, force_taskbar_icon_update)
 
     def show_help_dialog(self):
-        """弹出一个包含帮助信息的消息框。"""
-        try:
-            help_title = "SysTools - 命令行参数帮助"
-            help_message = (
-                "SysTools.exe 支持以下命令行参数:\n\n"
-                "-auto\n"
-                "    全自动模式：按顺序静默执行所有 'plugins' 目录中的插件。\n\n"
-                "-test\n"
-                "    测试模式：加载并执行 'plugins_test' 目录中的插件。\n\n"
-                "-cleanup\n"
-                "    清理模式：在 -auto 模式执行完毕后，自动删除程序自身及其所有相关文件。\n\n"
-                "-console\n"
-                "    控制台模式：为GUI应用附加一个控制台窗口，用于显示详细的运行日志。\n\n"
-                "-debug\n"
-                "    调试模式 (自动)：在 -auto 模式下模拟插件执行（随机成功/失败），不进行实际操作。\n\n"
-                "-debug-success\n"
-                "    调试模式 (全部成功)：在 -auto 模式下模拟插件执行，并总是返回成功。\n\n"
-                "-debuggui\n"
-                "    调试模式 (GUI)：在GUI界面中模拟插件执行（随机成功/失败）。\n\n"
-                "-debuggui-success\n"
-                "    调试模式 (GUI - 全部成功)：在GUI界面中模拟插件执行，并总是返回成功。\n\n"
-            )
-
-            # 【核心修复】不再创建临时的 tk.Tk()，而是直接使用主窗口 self.root 作为父级
-            messagebox.showinfo(help_title, help_message, parent=self.root)
-
-        except Exception as e:
-            help_title = "SysTools - Command Line Help"
-            help_message_fallback = "Could not display GUI help dialog."
-            print(f"无法显示帮助弹窗: {e}")
-            print(help_title)
-            print(help_message_fallback)
+        """弹出一个自定义的、内容可复制的帮助对话框。"""
+        HelpDialog(self.root)
 
     def bind_command(self, name: str, callback: Callable[[], None]):
         """【新增】Presenter 用此方法为按钮等控件绑定命令。"""

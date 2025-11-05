@@ -1,7 +1,7 @@
 import os
 import importlib
 import sys
-import logging
+import io
 from typing import List
 from plugin_base import BasePlugin
 
@@ -12,44 +12,38 @@ class PluginManager:
     def __init__(self, plugins_dir: str = "plugins"):
         self.plugins_dir = plugins_dir
         self.plugins: List[BasePlugin] = []
-        self.logger = self._setup_logger()
 
         # 修复编码问题
         self._fix_encoding()
 
     def _fix_encoding(self):
-        """修复编码问题"""
+        """修复编码问题 (健壮版)"""
         if sys.platform.startswith('win'):
             try:
-                # 在Windows下设置标准输出的编码
-                import io
-                if sys.stdout.encoding != 'utf-8':
+                # 【核心修复】在访问 .encoding 前，先检查流对象本身是否存在
+                if (sys.stdout is not None and
+                        hasattr(sys.stdout, 'encoding') and
+                        sys.stdout.encoding != 'utf-8' and
+                        hasattr(sys.stdout, 'buffer')):
                     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-                if sys.stderr.encoding != 'utf-8':
+
+                # 【核心修复】对 stderr 进行同样的检查
+                if (sys.stderr is not None and
+                        hasattr(sys.stderr, 'encoding') and
+                        sys.stderr.encoding != 'utf-8' and
+                        hasattr(sys.stderr, 'buffer')):
                     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
             except Exception as e:
-                self.logger.warning(f"修复编码失败: {str(e)}")
-
-    def _setup_logger(self):
-        """设置日志"""
-        logger = logging.getLogger("PluginManager")
-        logger.setLevel(logging.DEBUG)
-
-        # 如果没有处理器，添加一个简单的流处理器
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-
-        return logger
+                # 【核心修复】不再使用 self.logger，而是直接 print
+                # 只有在有控制台的情况下，这个 print 才能被看到
+                print(f"[WARNING] 在 plugin_manager.py 中修复编码失败: {str(e)}")
 
     def discover_plugins(self) -> List[BasePlugin]:
         """发现并加载所有插件"""
         self.plugins.clear()
 
         if not os.path.exists(self.plugins_dir):
-            self.logger.warning(f"插件目录不存在: {self.plugins_dir}")
+            print(f"[WARNING] 插件目录不存在: {self.plugins_dir}")
             return []
 
         # 将插件目录添加到Python路径
@@ -63,7 +57,7 @@ class PluginManager:
                 if filename.endswith('.py') and not filename.startswith('__'):
                     plugin_files.append(filename)
         except Exception as e:
-            self.logger.error(f"读取插件目录失败: {str(e)}")
+            print(f"[ERROR] 读取插件目录失败: {str(e)}")
             return []
 
         # ===================================================================
@@ -71,7 +65,7 @@ class PluginManager:
         # ===================================================================
         plugin_files.sort()
 
-        self.logger.info(f"发现并排序后的插件文件: {plugin_files}")
+        print(f"[INFO] 发现并排序后的插件文件: {plugin_files}")
 
         # 按排序后的顺序，依次加载每个插件文件
         loaded_count = 0
@@ -86,13 +80,13 @@ class PluginManager:
                         # 因为文件是有序加载的，所以append进去的插件列表自然也是有序的
                         self.plugins.append(plugin)
                         loaded_count += 1
-                        self.logger.info(f"[{filename}] 成功加载插件: {plugin.get_name()}")
+                        print(f"[INFO] [{filename}] 成功加载插件: {plugin.get_name()}")
                     elif plugin:
-                        self.logger.warning(f"[{filename}] 插件验证失败: {plugin.get_name()}")
+                        print(f"[WARNING] [{filename}] 插件验证失败: {plugin.get_name()}")
             except Exception as e:
                 self.logger.error(f"加载文件 {filename} 失败: {e}")
 
-        self.logger.info(f"最终按顺序加载了 {loaded_count} 个可用插件")
+        print(f"[INFO] 最终按顺序加载了 {loaded_count} 个可用插件")
         return self.plugins
 
     def _validate_plugin(self, plugin: BasePlugin) -> bool:
@@ -113,7 +107,7 @@ class PluginManager:
                 return True
 
         except Exception as e:
-            self.logger.error(f"验证插件失败: {e}")
+            print(f"[ERROR] 验证插件失败: {e}")
             return False
 
     def _load_plugin_module(self, module_name: str) -> List[BasePlugin]:
@@ -143,7 +137,7 @@ class PluginManager:
                         plugin_instance = attr()
                         plugins.append(plugin_instance)
                     except Exception as e:
-                        self.logger.error(f"实例化类 {attr_name} 失败: {e}")
+                        print(f"[ERROR] 实例化类 {attr_name} 失败: {e}")
 
         except Exception as e:
             # 简化错误日志，避免在控制台刷屏
@@ -168,7 +162,7 @@ class PluginManager:
         return [plugin for plugin in self.plugins if plugin.get_name() in names]
 
     def reload_plugins(self) -> List[BasePlugin]:
-        self.logger.info("重新加载所有插件...")
+        print("[INFO] 重新加载所有插件...")
         return self.discover_plugins()
 
     def __len__(self) -> int:

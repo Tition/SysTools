@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: ===================================================================
-::            SysTools - 自动化打包与分发脚本 (V7 - 包含 plugins_test)
+::            SysTools - 自动化打包与分发脚本 (V8 - 排除 __pycache__)
 :: ===================================================================
 
 echo.
@@ -15,6 +15,7 @@ set "PYINSTALLER_DIST=%PROJECT_ROOT%dist"
 set "PYINSTALLER_BUILD=%PROJECT_ROOT%build"
 set "FINAL_PACKAGE_DIR=%PROJECT_ROOT%SysTools_FinalPackage"
 set "VERSION_FILE=%PROJECT_ROOT%version_info.txt"
+set "EXCLUDE_FILE=%PROJECT_ROOT%build_exclude.txt"
 
 echo.
 echo [STEP 1/6] 清理旧的输出文件...
@@ -77,14 +78,23 @@ echo [STEP 5/6] 组装发布包，复制并整理所有文件...
 echo  - 移动主程序 SysTools.exe...
 move "%PYINSTALLER_DIST%\SysTools.exe" "%FINAL_PACKAGE_DIR%\"
 
-echo  - 复制 plugins 文件夹...
-xcopy "%PROJECT_ROOT%plugins" "%FINAL_PACKAGE_DIR%\plugins\" /s /e /i /y > nul
+rem ===================================================================
+rem  【核心修改】为 xcopy 命令添加 /EXCLUDE 参数
+rem ===================================================================
+if not exist "%EXCLUDE_FILE%" (
+    echo.
+    echo [WARNING] 排除文件 %EXCLUDE_FILE% 不存在，将复制所有文件。
+    set "EXCLUDE_PARAM="
+) else (
+    set "EXCLUDE_PARAM=/EXCLUDE:%EXCLUDE_FILE%"
+)
 
+echo  - 复制 plugins 文件夹 (排除 __pycache__)...
+xcopy "%PROJECT_ROOT%plugins" "%FINAL_PACKAGE_DIR%\plugins\" /s /e /i /y %EXCLUDE_PARAM% > nul
+
+echo  - 复制 plugins_test 文件夹 (排除 __pycache__)...
+xcopy "%PROJECT_ROOT%plugins_test" "%FINAL_PACKAGE_DIR%\plugins_test\" /s /e /i /y %EXCLUDE_PARAM% > nul
 rem ===================================================================
-rem  【核心新增】复制 plugins_test 文件夹
-rem ===================================================================
-echo  - 复制 plugins_test 文件夹...
-xcopy "%PROJECT_ROOT%plugins_test" "%FINAL_PACKAGE_DIR%\plugins_test\" /s /e /i /y > nul
 
 echo  - 复制 .ini 配置文件...
 xcopy "%PROJECT_ROOT%plugins\tools\*.ini" "%FINAL_PACKAGE_DIR%\" /y > nul
@@ -105,6 +115,8 @@ echo.
 echo [STEP 6/6] 清理临时的打包文件...
 rmdir /s /q "%PYINSTALLER_BUILD%"
 rmdir /s /q "%PYINSTALLER_DIST%"
+del /f /q "%PROJECT_ROOT%SysTools.spec" 2>nul
+del /f /q "%HIDDEN_IMPORTS_FILE%" 2>nul
 echo  - 清理完成。
 
 echo.

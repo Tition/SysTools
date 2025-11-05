@@ -1,9 +1,9 @@
+import textwrap
 from typing import TYPE_CHECKING
 
 # 使用 TYPE_CHECKING 避免循环导入
 if TYPE_CHECKING:
     from core import CoreEngine
-    from gui_tk import TkinterGUI
     # 可以添加其他GUI类的类型提示
     # from gui_flet import FletGUI
 
@@ -121,12 +121,36 @@ class Presenter:
 
     def handle_execution_complete(self, failed_plugins: list):
         self.view.safe_on_execution_complete_ui_reset()
+
         if failed_plugins:
-            failed_list = "\n".join([f"- {p['name']}: {p['error']}" for p in failed_plugins])
-            message = f"执行完成！\n\n以下插件执行失败：\n{failed_list}"
-            self.view.show_warning("执行完成", message)
+            # 【核心修复】使用 textwrap 来处理长消息
+            failed_items = []
+            for p in failed_plugins:
+                name = p.get('name', '未知插件')
+                error_msg = p.get('error', '未知错误')
+
+                # 将插件名和错误信息组合成一行
+                full_error_line = f"- {name}: {error_msg}"
+
+                # 使用 textwrap 将这一行包装在80个字符的宽度内
+                # subsequent_indent 会让换行后的行也带有缩进，保持对齐
+                wrapped_lines = textwrap.wrap(
+                    full_error_line,
+                    width=80,  # 设定一个合理的宽度
+                    subsequent_indent='    '  # 换行后的缩进
+                )
+
+                failed_items.append("\n".join(wrapped_lines))
+
+            failed_list = "\n\n".join(failed_items)  # 使用两个换行符分隔不同的插件错误
+            message = f"执行完成！\n\n以下插件执行失败：\n\n{failed_list}"
+            self.view.root.after(0, self.view.show_warning, "执行完成", message)
         else:
-            self.view.show_info("执行完成", "所有功能执行成功！")
+            self.view.root.after(0, self.view.show_info, "执行完成", "所有功能执行成功！")
+
         if self.core.reboot_required:
-            if self.view.show_restart_dialog():
-                self.core.perform_cleanup_and_exit(user_wants_reboot=True)
+            self.view.root.after(100, self._handle_reboot_request)
+
+    def _handle_reboot_request(self):
+        if self.view.show_restart_dialog():
+            self.core.perform_cleanup_and_exit(user_wants_reboot=True)
